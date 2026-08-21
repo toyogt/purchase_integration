@@ -67,6 +67,40 @@ def publish_supplier(doc, method=None):
     queue_event("supplier.upsert", "Supplier", doc.name, payload, "supplier")
 
 
+def publish_nimr(doc, method=None):
+    payload = {
+        "event_version": 1,
+        "modified_at": str(doc.modified),
+        "external_pr_id": doc.external_pr_id,
+        "correlation_id": doc.correlation_id,
+        "nimr_id": doc.name,
+        "status": doc.processing_status,
+        "docstatus": doc.docstatus,
+        "total_lines": doc.total_lines,
+        "ready_for_mr_lines": doc.ready_for_mr_lines,
+        "pending_item_verification_lines": doc.pending_item_verification_lines,
+        "mr_created_lines": doc.mr_created_lines,
+        "ordered_lines": doc.ordered_lines,
+        "failed_lines": doc.failed_lines,
+        "lines": [{
+            "external_line_id": row.external_line_id,
+            "k95_item_id": row.k95_item_id,
+            "erpnext_item_code": row.erpnext_item,
+            "item_resolution_status": row.item_resolution_status,
+            "processing_status": row.processing_status,
+            "requested_quantity": row.requested_qty,
+            "final_purchase_quantity": row.final_purchase_qty,
+            "mr_created_quantity": row.mr_created_qty,
+            "ordered_quantity": row.ordered_qty,
+        } for row in doc.items],
+    }
+    queue_event(
+        "purchase_request.status_changed", "New Item Material Request", doc.name,
+        payload, "purchase_request_status", external_pr_id=doc.external_pr_id,
+        correlation_id=doc.correlation_id,
+    )
+
+
 def _transaction_payload(doc):
     lines = []
     for row in doc.items:

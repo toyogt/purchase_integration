@@ -35,6 +35,8 @@ doc_events = {
 	"New Item Material Request": {
 		"before_validate": "purchase_integration.nimr.auto_match_on_validate",
 		"on_submit": "purchase_integration.nimr.create_mr_on_submit",
+		"on_update": "purchase_integration.events.publish_nimr",
+		"on_cancel": "purchase_integration.events.publish_nimr",
 	},
 	"Item": {
 		"on_update": "purchase_integration.events.publish_item",

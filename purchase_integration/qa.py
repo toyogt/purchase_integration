@@ -1,8 +1,10 @@
+import uuid
+
 import frappe
 
 from purchase_integration.api import _normalize
-from purchase_integration.events import publish_item, publish_material_request, publish_purchase_order, publish_supplier
-from purchase_integration.integration import canonical_json, sign
+from purchase_integration.events import publish_item, publish_material_request, publish_nimr, publish_purchase_order, publish_supplier
+from purchase_integration.integration import canonical_json, is_idempotent_success, queue_event, sign
 
 
 def dry_test():
@@ -24,6 +26,21 @@ def dry_test():
     checks["purchase_required_filter"] = pr_id == "K95-DRY-PR-1" and len(lines) == 1 and lines[0]["external_line_id"] == "L1"
     body = canonical_json({"b": 2, "a": 1})
     checks["canonical_hmac"] = body == '{"a":1,"b":2}' and sign("secret", "POST", "/path", "1", body) == sign("secret", "POST", "/path", "1", body)
+    response = type("Response", (), {"status_code": 409, "text": "Already processed"})()
+    checks["idempotent_409"] = is_idempotent_success(response)
+
+    savepoint = f"pi_dry_{uuid.uuid4().hex}"
+    frappe.db.savepoint(savepoint)
+    frappe.db.set_single_value("Purchase Integration Settings", "integration_enabled", 0)
+    event_name = queue_event(
+        "dry_test.event", "Dry Test", uuid.uuid4().hex,
+        {"event_version": 1, "modified_at": uuid.uuid4().hex}, "item",
+    )
+    checks["outbox_records_while_disabled"] = bool(event_name and frappe.db.exists("K95 Outbound Event", event_name))
+    frappe.db.rollback(save_point=savepoint)
+    publisher_savepoint = f"pi_publishers_{uuid.uuid4().hex}"
+    frappe.db.savepoint(publisher_savepoint)
+    frappe.db.set_single_value("Purchase Integration Settings", "integration_enabled", 0)
     item_name = frappe.db.get_value("Item", {}, "name")
     item = frappe.get_doc("Item", item_name)
     publish_item(item)
@@ -40,6 +57,11 @@ def dry_test():
     if po_name:
         publish_purchase_order(frappe.get_doc("Purchase Order", po_name))
     checks["purchase_order_hook"] = True
+    nimr_name = frappe.db.get_value("New Item Material Request", {}, "name")
+    if nimr_name:
+        publish_nimr(frappe.get_doc("New Item Material Request", nimr_name))
+    checks["nimr_status_hook"] = True
+    frappe.db.rollback(save_point=publisher_savepoint)
     checks["event_schema"] = all(frappe.get_meta("K95 Outbound Event").has_field(field) for field in ("idempotency_key", "payload_hash", "next_retry_at", "attempt_count"))
     checks["hooks_loaded"] = bool(frappe.get_hooks("scheduler_events"))
     return {"passed": all(checks.values()), "checks": checks}

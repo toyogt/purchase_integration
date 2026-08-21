@@ -61,8 +61,6 @@ def outbound_headers(settings, path, body, event):
 
 def queue_event(event_type, aggregate_type, aggregate_id, payload, endpoint_key, *, external_pr_id=None, external_line_id=None, correlation_id=None):
     settings = get_settings()
-    if not settings.integration_enabled:
-        return None
     path = settings.get(ENDPOINT_FIELDS[endpoint_key])
     if not path:
         frappe.throw(_("No endpoint is configured for {0}.").format(endpoint_key))
@@ -89,8 +87,15 @@ def queue_event(event_type, aggregate_type, aggregate_id, payload, endpoint_key,
         "status": "PENDING",
         "next_retry_at": now_datetime(),
     }).insert(ignore_permissions=True)
-    frappe.enqueue("purchase_integration.integration.deliver_event", event_name=event.name, queue="short", enqueue_after_commit=True)
+    # Disabling integration pauses transport only. The durable business event is
+    # still recorded so no Item, Supplier, NIMR, MR, or PO update is lost.
+    if settings.integration_enabled:
+        frappe.enqueue("purchase_integration.integration.deliver_event", event_name=event.name, queue="short", enqueue_after_commit=True)
     return event.name
+
+
+def is_idempotent_success(response):
+    return response.status_code == 409 and "already processed" in (response.text or "").lower()
 
 
 def deliver_event(event_name):
@@ -112,7 +117,8 @@ def deliver_event(event_name):
             verify=bool(settings.verify_ssl),
         )
         event.db_set({"response_status_code": response.status_code, "response_body": response.text[:10000]})
-        response.raise_for_status()
+        if not is_idempotent_success(response):
+            response.raise_for_status()
         event.db_set({"status": "DELIVERED", "delivered_at": now_datetime(), "last_error": None})
         frappe.db.set_single_value("Purchase Integration Settings", "last_successful_sync_at", now_datetime())
     except Exception as exc:
