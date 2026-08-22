@@ -67,25 +67,6 @@ def _find_unique_existing_item(row):
 		)
 		if mapped:
 			return mapped, "K95_ITEM_ID"
-	if row.external_item_code and frappe.db.exists(
-		"Item", {"name": row.external_item_code, "disabled": 0}
-	):
-		return row.external_item_code, "EXACT_ITEM_CODE"
-
-	item_name = (row.requested_item_name or "").strip()
-	if not item_name:
-		return None, None
-	matches = frappe.get_all(
-		"Item",
-		filters={"item_name": item_name, "disabled": 0},
-		pluck="name",
-		limit_page_length=2,
-	)
-	if len(matches) == 1:
-		return matches[0], "EXACT_ITEM_NAME"
-	if len(matches) > 1:
-		row.item_resolution_status = "DUPLICATE_REVIEW_REQUIRED"
-		row.processing_status = "PENDING_ITEM_VERIFICATION"
 	return None, None
 
 
@@ -93,6 +74,20 @@ def _auto_match_doc(nimr):
 	matched = []
 	for row in nimr.items:
 		if row.erpnext_item:
+			item = frappe.db.get_value(
+				"Item", {"name": row.erpnext_item, "disabled": 0}, ["stock_uom", "item_name"], as_dict=True
+			)
+			if not item:
+				row.erpnext_item = None
+				row.item_resolution_status = "PENDING_ITEM_CREATION"
+				row.processing_status = "PENDING_ITEM_VERIFICATION"
+				continue
+			row.purchase_uom = item.stock_uom
+			row.item_resolution_status = row.item_resolution_status or "MANUALLY_MATCHED"
+			row.processing_status = "READY_FOR_MR"
+			row.pending_mr_qty = max(
+				(row.final_purchase_qty or 0) - (row.mr_created_qty or 0), 0
+			)
 			continue
 		item_code, method = _find_unique_existing_item(row)
 		if not item_code:
@@ -106,8 +101,7 @@ def _auto_match_doc(nimr):
 		row.processing_status = "READY_FOR_MR"
 		row.resolved_by = frappe.session.user
 		row.resolved_at = now_datetime()
-		if not row.purchase_uom:
-			row.purchase_uom = item.stock_uom
+		row.purchase_uom = item.stock_uom
 		if not row.final_purchase_qty:
 			row.final_purchase_qty = row.purchase_required_qty
 		row.pending_mr_qty = max(
@@ -231,8 +225,7 @@ def create_item_from_nimr(nimr_name, row_name, values):
 	row.processing_status = "READY_FOR_MR"
 	row.resolved_by = frappe.session.user
 	row.resolved_at = now_datetime()
-	if not row.purchase_uom:
-		row.purchase_uom = stock_uom
+	row.purchase_uom = stock_uom
 	if not row.final_purchase_qty:
 		row.final_purchase_qty = row.purchase_required_qty
 	row.pending_mr_qty = max((row.final_purchase_qty or 0) - (row.mr_created_qty or 0), 0)

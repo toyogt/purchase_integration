@@ -190,6 +190,7 @@ def _configure_item_child():
         "source_column",
         "item_source",
         "external_item_code",
+        "k95_item_id",
         "requested_details_section",
         "requested_item_name",
         "requested_description",

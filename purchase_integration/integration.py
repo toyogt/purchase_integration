@@ -104,6 +104,7 @@ def deliver_event(event_name):
         return
     settings = get_settings()
     if not settings.integration_enabled:
+        event.db_set("last_error", "Integration delivery paused")
         return
     event.db_set({"status": "PROCESSING", "last_attempt_at": now_datetime(), "attempt_count": (event.attempt_count or 0) + 1})
     body = event.payload

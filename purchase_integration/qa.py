@@ -2,7 +2,7 @@ import uuid
 
 import frappe
 
-from purchase_integration.api import _normalize
+from purchase_integration.api import _build_nimr_document, _normalize
 from purchase_integration.events import publish_item, publish_material_request, publish_nimr, publish_purchase_order, publish_supplier
 from purchase_integration.integration import canonical_json, is_idempotent_success, queue_event, sign
 
@@ -28,6 +28,51 @@ def dry_test():
     checks["canonical_hmac"] = body == '{"a":1,"b":2}' and sign("secret", "POST", "/path", "1", body) == sign("secret", "POST", "/path", "1", body)
     response = type("Response", (), {"status_code": 409, "text": "Already processed"})()
     checks["idempotent_409"] = is_idempotent_success(response)
+
+    intake_savepoint = f"pi_intake_{uuid.uuid4().hex}"
+    frappe.db.savepoint(intake_savepoint)
+    settings = frappe.get_single("Purchase Integration Settings")
+    test_id = uuid.uuid4().hex
+    existing_item_name = frappe.db.get_value("Item", {}, "item_name") or "Name-only match test"
+    intake_data = {
+        "event_id": f"evt_{test_id}", "idempotency_key": f"idem_{test_id}",
+        "event_version": 1, "correlation_id": f"corr_{test_id}",
+        "purchase_request": {
+            "external_pr_id": f"K95-DRY-{test_id}", "request_date": "2026-08-22T09:26:06.489Z",
+            "submitted_at": "2026-08-22T09:27:06.489Z", "title": "Live failure regression",
+            "items": [{
+                "line_id": f"{test_id}-L001", "item_name": existing_item_name,
+                "requested_purchase_quantity": 2, "quantity": 2, "uom": "piece",
+                "required_by": "2026-08-29T00:00:00.000Z", "store_decision": "Purchase Required",
+                "send_to_erpnext": True,
+            }],
+            "attachments": [{"id": f"att_{test_id}", "line_id": f"{test_id}-L001", "media_type": "image", "file_name": "test.jpg"}],
+        },
+    }
+    request, intake_lines, intake_pr_id = _normalize(intake_data)
+    inbound = frappe.get_doc({
+        "doctype": "K95 Inbound Event", "event_id": intake_data["event_id"],
+        "idempotency_key": intake_data["idempotency_key"], "event_type": "purchase_request.store_verified",
+        "external_pr_id": intake_pr_id, "payload": canonical_json(intake_data), "payload_hash": test_id,
+        "status": "PROCESSING", "attempt_count": 1,
+    }).insert(ignore_permissions=True)
+    intake_doc = _build_nimr_document(settings, intake_data, request, intake_lines, intake_pr_id, inbound)
+    intake_doc.insert(ignore_permissions=True)
+    checks["iso_datetime_intake"] = bool(intake_doc.request_date and intake_doc.submitted_at)
+    checks["free_text_new_item_uom"] = intake_doc.items[0].requested_uom == "piece" and not intake_doc.items[0].purchase_uom
+    checks["lowercase_attachment_media"] = intake_doc.attachments[0].media_type == "IMAGE"
+    checks["name_only_item_not_matched"] = not intake_doc.items[0].erpnext_item
+    try:
+        _normalize({
+            "external_pr_id": f"K95-ZERO-{test_id}",
+            "items": [{"line_id": "ZERO-L1", "item_name": "Zero", "requested_purchase_quantity": 0,
+                       "quantity": 10, "store_decision": "Purchase Required", "send_to_erpnext": True}],
+        })
+        checks["zero_qty_rejected"] = False
+    except frappe.ValidationError as exc:
+        checks["zero_qty_rejected"] = "greater than 0" in str(exc)
+    checks["zero_qty_created_no_nimr"] = not frappe.db.exists("New Item Material Request", f"K95-ZERO-{test_id}")
+    frappe.db.rollback(save_point=intake_savepoint)
 
     savepoint = f"pi_dry_{uuid.uuid4().hex}"
     frappe.db.savepoint(savepoint)
