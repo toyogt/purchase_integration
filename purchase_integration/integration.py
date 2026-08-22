@@ -99,6 +99,10 @@ def is_idempotent_success(response):
 
 
 def deliver_event(event_name):
+    if not frappe.db.exists("K95 Outbound Event", event_name):
+        # A queued job can outlive a dry-test rollback or a manually removed
+        # event. Treat it as stale work instead of creating an Error Log.
+        return {"skipped": True, "reason": "event_not_found", "event": event_name}
     event = frappe.get_doc("K95 Outbound Event", event_name)
     if event.status in ("DELIVERED", "CANCELLED", "DEAD_LETTER"):
         return

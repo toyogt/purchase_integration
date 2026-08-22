@@ -4,7 +4,7 @@ import frappe
 
 from purchase_integration.api import _build_nimr_document, _normalize
 from purchase_integration.events import publish_item, publish_material_request, publish_nimr, publish_purchase_order, publish_supplier
-from purchase_integration.integration import canonical_json, is_idempotent_success, queue_event, sign
+from purchase_integration.integration import canonical_json, deliver_event, is_idempotent_success, queue_event, sign
 
 
 def dry_test():
@@ -28,6 +28,8 @@ def dry_test():
     checks["canonical_hmac"] = body == '{"a":1,"b":2}' and sign("secret", "POST", "/path", "1", body) == sign("secret", "POST", "/path", "1", body)
     response = type("Response", (), {"status_code": 409, "text": "Already processed"})()
     checks["idempotent_409"] = is_idempotent_success(response)
+    missing_result = deliver_event(f"missing_{uuid.uuid4().hex}")
+    checks["missing_outbound_event_guard"] = bool(missing_result and missing_result.get("reason") == "event_not_found")
 
     intake_savepoint = f"pi_intake_{uuid.uuid4().hex}"
     frappe.db.savepoint(intake_savepoint)

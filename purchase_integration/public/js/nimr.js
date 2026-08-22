@@ -1,53 +1,5 @@
 frappe.provide("purchase_integration.nimr");
 
-purchase_integration.nimr.paint_item_rows = function (frm) {
-	if (!document.getElementById("nimr-row-status-styles")) {
-		$("<style>", {
-			id: "nimr-row-status-styles",
-			text: `
-				.nimr-row-pending .grid-static-col { background-color:#fff7df !important; }
-				.nimr-row-ready .grid-static-col { background-color:#eef6ff !important; }
-				.nimr-row-mr-created .grid-static-col { background-color:#ecfdf3 !important; }
-				.nimr-row-ordered .grid-static-col { background-color:#f5f3ff !important; }
-				.nimr-row-error .grid-static-col { background-color:#fff1f2 !important; }
-			`,
-		}).appendTo("head");
-	}
-	const progress_colors = {
-		"Pending Item Creation": "orange",
-		"Ready for MR": "blue",
-		"Partially MR Created": "orange",
-		"MR Fully Created": "green",
-		"Partially Ordered": "purple",
-		"Fully Ordered": "green",
-		Error: "red",
-	};
-	frm.set_intro(
-		__("NIMR Progress: {0}", [frm.doc.processing_status || "Pending Item Creation"]),
-		progress_colors[frm.doc.processing_status] || "blue"
-	);
-
-	setTimeout(() => {
-		const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
-		if (!grid) return;
-		const palette = {
-			PENDING_ITEM_VERIFICATION: { className: "nimr-row-pending", border: "#f59e0b" },
-			READY_FOR_MR: { className: "nimr-row-ready", border: "#3b82f6" },
-			PARTIALLY_CONVERTED: { className: "nimr-row-pending", border: "#f59e0b" },
-			MR_CREATED: { className: "nimr-row-mr-created", border: "#22c55e" },
-			PARTIALLY_ORDERED: { className: "nimr-row-ordered", border: "#8b5cf6" },
-			ORDERED: { className: "nimr-row-ordered", border: "#15803d" },
-			ERROR: { className: "nimr-row-error", border: "#ef4444" },
-		};
-		grid.grid_rows.forEach((grid_row) => {
-			const style = palette[grid_row.doc.processing_status] || palette.PENDING_ITEM_VERIFICATION;
-			const $row = grid_row.wrapper || grid_row.row;
-			$row.removeClass("nimr-row-pending nimr-row-ready nimr-row-mr-created nimr-row-ordered nimr-row-error");
-			$row.addClass(style.className).css("border-left", `5px solid ${style.border}`);
-		});
-	}, 0);
-};
-
 purchase_integration.nimr.open_create_item_dialog = function (frm, row) {
 	const suggested_code = `K95-${(row.requested_item_name || "NEW-ITEM")
 		.toUpperCase()
@@ -106,7 +58,6 @@ purchase_integration.nimr.open_create_item_dialog = function (frm, row) {
 frappe.ui.form.on("New Item Material Request", {
 	refresh(frm) {
 		if (frm.is_new()) return;
-		purchase_integration.nimr.paint_item_rows(frm);
 		const unresolved = (frm.doc.items || []).filter((row) => !row.erpnext_item);
 		if (unresolved.length && !frm.is_dirty() && !frm.__nimr_auto_match_checked) {
 			frm.__nimr_auto_match_checked = true;
@@ -175,9 +126,6 @@ frappe.ui.form.on("New Item Material Request", {
 });
 
 frappe.ui.form.on("NIMR Item", {
-	form_render(frm) {
-		purchase_integration.nimr.paint_item_rows(frm);
-	},
 	create_item_action(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
 		if (row.erpnext_item) {
