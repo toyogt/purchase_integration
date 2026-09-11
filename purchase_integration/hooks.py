@@ -41,10 +41,6 @@ doc_events = {
 	"Item": {
 		"on_update": "purchase_integration.events.publish_item",
 	},
-	"Supplier": {
-		"validate": "purchase_integration.events.validate_supplier",
-		"on_update": "purchase_integration.events.publish_supplier",
-	},
 	"Material Request": {
 		"on_update": "purchase_integration.events.publish_material_request",
 		"on_cancel": "purchase_integration.events.publish_material_request",
