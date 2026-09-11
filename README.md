@@ -10,7 +10,7 @@ The `after_install` and `after_migrate` hooks run an idempotent schema installer
 - NIMR Item, Attachment, and Conversion Allocation child DocTypes
 - Purchase Integration Settings
 - K95 Inbound Event and K95 Outbound Event
-- Item and Supplier K95 identity and sync fields
+- Item K95 identity and sync fields in the ERPK95 tab
 - Material Request Item and Purchase Order Item traceability fields
 - NIMR Connections
 - calculated progress states and retirement of the obsolete legacy Workflow
@@ -18,6 +18,34 @@ The `after_install` and `after_migrate` hooks run an idempotent schema installer
 
 No manual Customize Form export is required.
 
+### Supplier integration retirement
+
+Supplier master publishing is not supported. The app removes only its retired
+Supplier Custom Fields during migration and performs no CRUD on Supplier records.
+It does not change the standard Supplier `disabled` status. Old queued Supplier
+events are cancelled without delivery. A PO's Supplier name and ID are included
+only when that PO contains NIMR-linked K95 lines.
+
+To apply only the settings and ERPK95 field layout/cleanup on an existing site,
+without running the NIMR migration, back up the site and execute:
+
+```bash
+bench --site YOUR_SITE backup
+bench --site YOUR_SITE execute purchase_integration.schema.apply_master_integration_changes
+bench --site YOUR_SITE clear-cache
+```
+
+This deletes the retired integration Custom Fields but does not delete or update
+Supplier records. Restart the deployed application workers after updating the
+Python code. Reload
+Desk to see the new field layout. Standard full installation/migration hooks
+remain unchanged.
+
+Isolated regressions (no database writes or HTTP requests):
+
+```bash
+./env/bin/python -m unittest purchase_integration.test_supplier_retirement -v
+```
 ## Installation
 
 ```bash

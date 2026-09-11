@@ -105,6 +105,13 @@ def deliver_event(event_name):
     event = frappe.get_doc("K95 Outbound Event", event_name)
     if event.status in ("DELIVERED", "CANCELLED", "DEAD_LETTER"):
         return
+    if (event.get("aggregate_type") == "Supplier"
+            or str(event.get("event_type") or "").lower().startswith("supplier.")
+            or "/suppliers/" in str(event.get("endpoint_path") or "")):
+        # Jobs queued before Supplier synchronization was removed must not publish.
+        event.db_set({"status": "CANCELLED", "next_retry_at": None,
+                      "last_error": "Supplier synchronization has been removed"})
+        return {"skipped": True, "reason": "supplier_sync_removed", "event": event_name}
     settings = get_settings()
     if not settings.integration_enabled:
         event.db_set("last_error", "Integration delivery paused")

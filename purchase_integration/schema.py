@@ -367,13 +367,29 @@ def _remove_custom_fields(doctype, fieldnames):
             frappe.delete_doc("Custom Field", name, ignore_permissions=True, force=True)
 
 
+def _ensure_erpk95_fields(doctype, definitions, legacy_fields=()):
+    """Append our tab without moving standard fields or changing legacy data types."""
+    definitions = [dict(field) for field in definitions]
+    previous = definitions[-1]["fieldname"]
+    for fieldname in legacy_fields:
+        if frappe.db.exists("Custom Field", f"{doctype}-{fieldname}"):
+            definitions.append({"fieldname": fieldname, "insert_after": previous})
+            previous = fieldname
+    owned = {field["fieldname"] for field in definitions}
+    remaining = [field.fieldname for field in frappe.get_meta(doctype).fields
+                 if field.fieldname not in owned]
+    definitions[0]["insert_after"] = remaining[-1] if remaining else ""
+    _ensure_custom_fields(doctype, definitions)
+    frappe.clear_cache(doctype=doctype)
+
+
 def _ensure_master_and_traceability_fields():
     sync_fields = [
         {"fieldname": "custom_k95_sync_status", "label": "K95 Sync Status", "fieldtype": "Select", "options": "NOT_SYNCED\nQUEUED\nSYNCED\nFAILED\nCONFLICT", "default": "NOT_SYNCED", "read_only": 1},
         {"fieldname": "custom_k95_last_synced_at", "label": "K95 Last Synced At", "fieldtype": "Datetime", "read_only": 1},
         {"fieldname": "custom_k95_last_sync_error", "label": "K95 Last Sync Error", "fieldtype": "Small Text", "read_only": 1},
     ]
-    _ensure_custom_fields("Item", [
+    _ensure_erpk95_fields("Item", [
         {"fieldname": "custom_erpk95_tab", "label": "ERPK95", "fieldtype": "Tab Break", "insert_after": "disabled"},
         {"fieldname": "custom_erpk95_identity_section", "label": "K95 Identity", "fieldtype": "Section Break", "insert_after": "custom_erpk95_tab"},
         {"fieldname": "custom_k95_item_id", "label": "K95 Item ID", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1, "in_standard_filter": 1, "insert_after": "custom_erpk95_identity_section"},
@@ -386,11 +402,25 @@ def _ensure_master_and_traceability_fields():
         {**sync_fields[0], "insert_after": "custom_erpk95_sync_section"},
         {**sync_fields[1], "insert_after": "custom_k95_sync_status"},
         {**sync_fields[2], "insert_after": "custom_k95_last_synced_at"},
-    ])
+    ], legacy_fields=(
+        "custom_created_via_nimr", "custom_proposed_item_name",
+        "custom_item_description_", "custom_quantity", "custom_unit",
+        "custom_requested_by_date", "custom_gmail", "custom_image_link",
+        "custom_pr_unique_id", "custom_pr_no",
+    ))
+    # Supplier master synchronization was retired. Remove only the Custom Fields
+    # previously owned by this app; never alter Supplier records or their standard
+    # ``disabled`` status.
     _remove_custom_fields("Supplier", [
-        "custom_k95_supplier_id", "custom_k95_postal_code", "custom_k95_approval_status",
-        "custom_publish_to_k95", "custom_k95_sync_status", "custom_k95_last_synced_at",
-        "custom_k95_last_sync_error", "custom_erpk95_tab", "custom_erpk95_identity_section",
+        "custom_k95_supplier_id",
+        "custom_k95_postal_code",
+        "custom_k95_approval_status",
+        "custom_publish_to_k95",
+        "custom_k95_sync_status",
+        "custom_k95_last_synced_at",
+        "custom_k95_last_sync_error",
+        "custom_erpk95_tab",
+        "custom_erpk95_identity_section",
         "custom_erpk95_sync_section",
     ])
     trace_fields = [
@@ -402,8 +432,21 @@ def _ensure_master_and_traceability_fields():
         {"fieldname": "custom_nimr", "label": "NIMR", "fieldtype": "Link", "options": PARENT, "read_only": 1, "insert_after": "custom_k95_item_id"},
         {"fieldname": "custom_nimr_item_row", "label": "NIMR Item Row", "fieldtype": "Data", "read_only": 1, "insert_after": "custom_nimr"},
     ]
-    _ensure_custom_fields("Material Request Item", trace_fields)
-    _ensure_custom_fields("Purchase Order Item", trace_fields)
+    _ensure_erpk95_fields("Material Request Item", trace_fields)
+    _ensure_erpk95_fields("Purchase Order Item", trace_fields)
+    if frappe.db.exists("Custom Field", "Material Request-custom_nimr_link"):
+        _ensure_erpk95_fields("Material Request", [
+            {"fieldname": "custom_erpk95_tab", "label": "ERPK95", "fieldtype": "Tab Break"},
+            {"fieldname": "custom_erpk95_trace_section", "label": "K95 Traceability",
+             "fieldtype": "Section Break", "insert_after": "custom_erpk95_tab"},
+        ], legacy_fields=("custom_nimr_link",))
+
+
+def apply_master_integration_changes():
+    """Apply only master/traceability changes; do not migrate NIMR."""
+    _create_integration_settings()
+    _ensure_master_and_traceability_fields()
+    frappe.db.commit()
 
 
 def _ensure_item_integration_fields():

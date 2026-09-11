@@ -4,11 +4,16 @@ import frappe
 
 from purchase_integration.api import _build_nimr_document, _normalize
 from purchase_integration.events import publish_item, publish_material_request, publish_nimr, publish_purchase_order
+from purchase_integration.hooks import doc_events
 from purchase_integration.integration import canonical_json, deliver_event, is_idempotent_success, queue_event, sign
 
 
 def dry_test():
     checks = {}
+    checks["no_active_nimr_workflow"] = not frappe.db.exists(
+        "Workflow", {"document_type": "New Item Material Request", "is_active": 1}
+    )
+    checks["no_purchase_integration_supplier_hook"] = "Supplier" not in doc_events
     checks["doctypes"] = all(frappe.db.exists("DocType", dt) for dt in ("K95 Inbound Event", "K95 Outbound Event", "Purchase Integration Settings"))
     required_fields = {
         "Item": "custom_k95_item_id",

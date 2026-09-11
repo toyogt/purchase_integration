@@ -66,9 +66,9 @@ def publish_nimr(doc, method=None):
     )
 
 
-def _transaction_payload(doc):
+def _transaction_payload(doc, rows=None):
     lines = []
-    for row in doc.items:
+    for row in rows if rows is not None else doc.items:
         lines.append({
             "erpnext_line_id": row.name, "k95_pr_id": row.custom_k95_pr_id,
             "k95_line_id": row.custom_k95_line_id, "k95_item_id": row.custom_k95_item_id,
@@ -82,23 +82,31 @@ def _transaction_payload(doc):
 
 
 def publish_material_request(doc, method=None):
+    linked_rows = [row for row in doc.items if row.custom_k95_pr_id and row.custom_nimr]
+    if not linked_rows:
+        return
+    pr_id = linked_rows[0].custom_k95_pr_id
     payload = {
         "event_version": 1, "modified_at": str(doc.modified), "material_request": doc.name,
         "status": doc.status, "docstatus": doc.docstatus, "transaction_date": str(doc.transaction_date or ""),
-        "schedule_date": str(doc.schedule_date or ""), "company": doc.company, "lines": _transaction_payload(doc),
+        "schedule_date": str(doc.schedule_date or ""), "company": doc.company,
+        "lines": _transaction_payload(doc, linked_rows),
     }
-    pr_id = next((row.custom_k95_pr_id for row in doc.items if row.custom_k95_pr_id), None)
     queue_event("material_request.upsert", "Material Request", doc.name, payload, "material_request", external_pr_id=pr_id)
 
 
 def publish_purchase_order(doc, method=None):
+    linked_rows = [row for row in doc.items if row.custom_k95_pr_id and row.custom_nimr]
+    if not linked_rows:
+        return
+    pr_id = linked_rows[0].custom_k95_pr_id
     payload = {
         "event_version": 1, "modified_at": str(doc.modified), "purchase_order": doc.name,
         "status": doc.status, "docstatus": doc.docstatus, "supplier": doc.supplier,
         "supplier_name": doc.supplier_name, "transaction_date": str(doc.transaction_date or ""),
         "schedule_date": str(doc.schedule_date or ""), "currency": doc.currency,
         "net_total": doc.net_total, "grand_total": doc.grand_total, "company": doc.company,
-        "per_received": doc.per_received, "per_billed": doc.per_billed, "lines": _transaction_payload(doc),
+        "per_received": doc.per_received, "per_billed": doc.per_billed,
+        "lines": _transaction_payload(doc, linked_rows),
     }
-    pr_id = next((row.custom_k95_pr_id for row in doc.items if row.custom_k95_pr_id), None)
     queue_event("purchase_order.upsert", "Purchase Order", doc.name, payload, "purchase_order", external_pr_id=pr_id)

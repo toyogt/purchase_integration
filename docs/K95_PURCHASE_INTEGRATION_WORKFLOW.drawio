@@ -1,0 +1,78 @@
+<mxfile host="app.diagrams.net" modified="2026-09-11T16:30:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="k95-purchase-v1" name="K95 Purchase Integration">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="K95 Purchase Request → ERPNext NIMR → MR → PO" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="390" y="20" width="760" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="k95lane" value="K95 APP" style="swimlane;html=1;horizontal=0;startSize=40;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="30" y="80" width="440" height="820" as="geometry"/>
+        </mxCell>
+        <mxCell id="erplane" value="ERPNEXT / PURCHASE INTEGRATION" style="swimlane;html=1;horizontal=0;startSize=40;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="500" y="80" width="1020" height="820" as="geometry"/>
+        </mxCell>
+        <mxCell id="pr" value="Purchase Request approved by HOD and Store" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="90" y="125" width="310" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="filter" value="Send only Purchase Required lines with positive quantity and permanent PR/line IDs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="90" y="230" width="310" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="send" value="Signed API event&#xa;purchase_request.store_verified" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="90" y="350" width="310" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="receive" value="Validate HMAC, replay window, identity, quantity and idempotency" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="565" y="125" width="300" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="nimr" value="Create or reuse one NIMR&#xa;Preserve every received purchase line and attachment" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="565" y="245" width="300" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="exists" value="Mapped enabled Item exists?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="620" y="375" width="190" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="mapped" value="Yes: line becomes Ready for MR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="910" y="360" width="245" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="newitem" value="No: Pending Item Creation&#xa;User creates/maps Item from NIMR&#xa;Item fields are under ERPK95 tab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="910" y="450" width="245" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="select" value="User selects eligible line quantities" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="595" y="570" width="240" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="mr" value="Create new Material Request for selected pending quantity&#xa;Partial lines remain traceable" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="895" y="570" width="290" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="po" value="Create Purchase Order from MR&#xa;PO Supplier is standard ERPNext data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="895" y="695" width="290" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="linked" value="PO has NIMR-linked K95 lines?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="1235" y="680" width="210" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="callback" value="Yes: queue PO callback&#xa;Supplier name/ID, PO date, delivery date, quantities and values&#xa;Only linked lines are included" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="90" y="690" width="310" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="normalpo" value="No: normal ERPNext PO&#xa;No K95 callback" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="1240" y="815" width="200" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="supplierRule" value="SUPPLIER MASTER RULE&#xa;No create/update/delete, no approval-status disabling, and no Supplier custom-field synchronization. Retired integration Custom Fields are removed during migration." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="535" y="800" width="630" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block" edge="1" parent="1" source="pr" target="filter"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block" edge="1" parent="1" source="filter" target="send"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block" edge="1" parent="1" source="send" target="receive"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block" edge="1" parent="1" source="receive" target="nimr"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block" edge="1" parent="1" source="nimr" target="exists"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="exists" target="mapped"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="exists" target="newitem"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="mapped" target="select"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="After create/map" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="newitem" target="select"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="select" target="mr"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="mr" target="po"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="po" target="linked"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="linked" target="callback"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block" edge="1" parent="1" source="linked" target="normalpo"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
