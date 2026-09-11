@@ -3,7 +3,7 @@ import uuid
 import frappe
 
 from purchase_integration.api import _build_nimr_document, _normalize
-from purchase_integration.events import publish_item, publish_material_request, publish_nimr, publish_purchase_order
+from purchase_integration.events import publish_item, publish_material_request, publish_nimr, publish_purchase_order, publish_supplier
 from purchase_integration.integration import canonical_json, deliver_event, is_idempotent_success, queue_event, sign
 
 
@@ -11,7 +11,7 @@ def dry_test():
     checks = {}
     checks["doctypes"] = all(frappe.db.exists("DocType", dt) for dt in ("K95 Inbound Event", "K95 Outbound Event", "Purchase Integration Settings"))
     required_fields = {
-        "Item": "custom_k95_item_id",
+        "Item": "custom_k95_item_id", "Supplier": "custom_k95_supplier_id",
         "Material Request Item": "custom_k95_line_id", "Purchase Order Item": "custom_k95_line_id",
         "NIMR Item": "k95_item_id",
     }
@@ -92,6 +92,10 @@ def dry_test():
     item = frappe.get_doc("Item", item_name)
     publish_item(item)
     checks["item_hook"] = True
+    supplier_name = frappe.db.get_value("Supplier", {}, "name")
+    if supplier_name:
+        publish_supplier(frappe.get_doc("Supplier", supplier_name))
+    checks["supplier_hook"] = True
     mr_name = frappe.db.get_value("Material Request", {}, "name")
     if mr_name:
         publish_material_request(frappe.get_doc("Material Request", mr_name))

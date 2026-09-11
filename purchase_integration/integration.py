@@ -13,6 +13,7 @@ from frappe.utils import add_to_date, now_datetime
 
 ENDPOINT_FIELDS = {
     "item": "item_upsert_path",
+    "supplier": "supplier_upsert_path",
     "material_request": "material_request_upsert_path",
     "purchase_order": "purchase_order_upsert_path",
     "purchase_request_status": "purchase_request_status_path",
@@ -87,7 +88,7 @@ def queue_event(event_type, aggregate_type, aggregate_id, payload, endpoint_key,
         "next_retry_at": now_datetime(),
     }).insert(ignore_permissions=True)
     # Disabling integration pauses transport only. The durable business event is
-    # still recorded so no Item, NIMR, MR, or PO update is lost.
+    # still recorded so no Item, Supplier, NIMR, MR, or PO update is lost.
     if settings.integration_enabled:
         frappe.enqueue("purchase_integration.integration.deliver_event", event_name=event.name, queue="short", enqueue_after_commit=True)
     return event.name

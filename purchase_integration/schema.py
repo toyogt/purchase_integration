@@ -259,6 +259,7 @@ def _create_integration_settings():
         _field("outbound_section", "K95 Outbound Endpoints", "Section Break", collapsible=1),
         _field("item_upsert_path", "Item Upsert Path", "Data", default="/api/erpnext/items/upsert"),
         _field("item_mapping_path", "Item Mapping Path", "Data", default="/api/erpnext/items/map"),
+        _field("supplier_upsert_path", "Supplier Upsert Path", "Data", default="/api/erpnext/suppliers/upsert"),
         _field("material_request_upsert_path", "Material Request Upsert Path", "Data", default="/api/erpnext/material-requests/upsert"),
         _field("outbound_column", "", "Column Break"),
         _field("purchase_order_upsert_path", "Purchase Order Upsert Path", "Data", default="/api/erpnext/purchase-orders/upsert"),
@@ -290,8 +291,6 @@ def _create_integration_settings():
         _field("last_successful_sync_at", "Last Successful Sync", "Datetime", read_only=1),
         _field("last_connection_error", "Last Connection Error", "Long Text", read_only=1),
     ]
-
-    doc.fields = [row for row in doc.fields if row.fieldname != "supplier_upsert_path"]
 
     existing_fields = {row.fieldname: row for row in doc.fields}
     for definition in definitions:
@@ -360,13 +359,6 @@ def _ensure_custom_fields(doctype, definitions):
             frappe.get_doc({"doctype": "Custom Field", "name": name, "dt": doctype, **definition}).insert(ignore_permissions=True)
 
 
-def _remove_custom_fields(doctype, fieldnames):
-    for fieldname in fieldnames:
-        name = f"{doctype}-{fieldname}"
-        if frappe.db.exists("Custom Field", name):
-            frappe.delete_doc("Custom Field", name, ignore_permissions=True, force=True)
-
-
 def _ensure_master_and_traceability_fields():
     sync_fields = [
         {"fieldname": "custom_k95_sync_status", "label": "K95 Sync Status", "fieldtype": "Select", "options": "NOT_SYNCED\nQUEUED\nSYNCED\nFAILED\nCONFLICT", "default": "NOT_SYNCED", "read_only": 1},
@@ -374,41 +366,72 @@ def _ensure_master_and_traceability_fields():
         {"fieldname": "custom_k95_last_sync_error", "label": "K95 Last Sync Error", "fieldtype": "Small Text", "read_only": 1},
     ]
     _ensure_custom_fields("Item", [
-        {"fieldname": "custom_erpk95_tab", "label": "ERPK95", "fieldtype": "Tab Break", "insert_after": "disabled"},
-        {"fieldname": "custom_erpk95_identity_section", "label": "K95 Identity", "fieldtype": "Section Break", "insert_after": "custom_erpk95_tab"},
-        {"fieldname": "custom_k95_item_id", "label": "K95 Item ID", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1, "in_standard_filter": 1, "insert_after": "custom_erpk95_identity_section"},
+        {"fieldname": "custom_k95_item_id", "label": "K95 Item ID", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1, "in_standard_filter": 1, "insert_after": "item_name"},
         {"fieldname": "custom_k95_item_code", "label": "K95 Item Code", "fieldtype": "Data", "read_only": 1, "no_copy": 1, "insert_after": "custom_k95_item_id"},
-        {"fieldname": "custom_publish_to_k95", "label": "Publish to K95", "fieldtype": "Check", "default": "0", "insert_after": "custom_k95_item_code"},
-        {"fieldname": "custom_purchase_erp", "label": "Purchase ERP", "fieldtype": "Check", "default": "0", "read_only": 1, "insert_after": "custom_publish_to_k95"},
-        {"fieldname": "custom_k95_external_pr_id", "label": "K95 Purchase Request", "fieldtype": "Data", "read_only": 1, "insert_after": "custom_purchase_erp"},
-        {"fieldname": "custom_k95_external_line_id", "label": "K95 Purchase Request Line", "fieldtype": "Data", "read_only": 1, "insert_after": "custom_k95_external_pr_id"},
-        {"fieldname": "custom_erpk95_sync_section", "label": "Synchronization", "fieldtype": "Section Break", "insert_after": "custom_k95_external_line_id"},
-        {**sync_fields[0], "insert_after": "custom_erpk95_sync_section"},
-        {**sync_fields[1], "insert_after": "custom_k95_sync_status"},
-        {**sync_fields[2], "insert_after": "custom_k95_last_synced_at"},
+        *sync_fields,
     ])
-    _remove_custom_fields("Supplier", [
-        "custom_k95_supplier_id", "custom_k95_postal_code", "custom_k95_approval_status",
-        "custom_publish_to_k95", "custom_k95_sync_status", "custom_k95_last_synced_at",
-        "custom_k95_last_sync_error", "custom_erpk95_tab", "custom_erpk95_identity_section",
-        "custom_erpk95_sync_section",
+    _ensure_custom_fields("Supplier", [
+        {"fieldname": "custom_k95_supplier_id", "label": "K95 Supplier ID", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1, "in_standard_filter": 1, "insert_after": "supplier_name"},
+        {"fieldname": "custom_k95_postal_code", "label": "K95 Postal Code", "fieldtype": "Data", "insert_after": "tax_id"},
+        {"fieldname": "custom_k95_approval_status", "label": "K95 Approval Status", "fieldtype": "Select", "options": "Hold\nApproved\nBlocked", "default": "Hold", "insert_after": "custom_k95_postal_code"},
+        {"fieldname": "custom_publish_to_k95", "label": "Publish to K95", "fieldtype": "Check", "default": "1", "insert_after": "custom_k95_approval_status"},
+        *sync_fields,
     ])
     trace_fields = [
-        {"fieldname": "custom_erpk95_tab", "label": "ERPK95", "fieldtype": "Tab Break"},
-        {"fieldname": "custom_erpk95_trace_section", "label": "K95 Traceability", "fieldtype": "Section Break", "insert_after": "custom_erpk95_tab"},
-        {"fieldname": "custom_k95_pr_id", "label": "K95 Purchase Request", "fieldtype": "Data", "read_only": 1, "insert_after": "custom_erpk95_trace_section"},
-        {"fieldname": "custom_k95_line_id", "label": "K95 Purchase Request Line", "fieldtype": "Data", "read_only": 1, "insert_after": "custom_k95_pr_id"},
-        {"fieldname": "custom_k95_item_id", "label": "K95 Item ID", "fieldtype": "Data", "read_only": 1, "insert_after": "custom_k95_line_id"},
-        {"fieldname": "custom_nimr", "label": "NIMR", "fieldtype": "Link", "options": PARENT, "read_only": 1, "insert_after": "custom_k95_item_id"},
-        {"fieldname": "custom_nimr_item_row", "label": "NIMR Item Row", "fieldtype": "Data", "read_only": 1, "insert_after": "custom_nimr"},
+        {"fieldname": "custom_k95_pr_id", "label": "K95 Purchase Request", "fieldtype": "Data", "read_only": 1},
+        {"fieldname": "custom_k95_line_id", "label": "K95 Purchase Request Line", "fieldtype": "Data", "read_only": 1},
+        {"fieldname": "custom_k95_item_id", "label": "K95 Item ID", "fieldtype": "Data", "read_only": 1},
+        {"fieldname": "custom_nimr", "label": "NIMR", "fieldtype": "Link", "options": PARENT, "read_only": 1},
+        {"fieldname": "custom_nimr_item_row", "label": "NIMR Item Row", "fieldtype": "Data", "read_only": 1},
     ]
     _ensure_custom_fields("Material Request Item", trace_fields)
     _ensure_custom_fields("Purchase Order Item", trace_fields)
 
 
 def _ensure_item_integration_fields():
-    # Item integration fields are maintained together in the ERPK95 tab above.
-    return
+    fields = [
+        {
+            "fieldname": "custom_publish_to_k95",
+            "label": "Publish to K95",
+            "fieldtype": "Check",
+            "default": "0",
+            "insert_after": "custom_created_via_nimr",
+        },
+        {
+            "fieldname": "custom_purchase_erp",
+            "label": "Purchase ERP",
+            "fieldtype": "Check",
+            "default": "0",
+            "read_only": 1,
+            "insert_after": "custom_publish_to_k95",
+        },
+        {
+            "fieldname": "custom_k95_external_pr_id",
+            "label": "K95 Purchase Request",
+            "fieldtype": "Data",
+            "read_only": 1,
+            "insert_after": "custom_publish_to_k95",
+        },
+        {
+            "fieldname": "custom_k95_external_line_id",
+            "label": "K95 Purchase Request Line",
+            "fieldtype": "Data",
+            "read_only": 1,
+            "insert_after": "custom_k95_external_pr_id",
+        },
+    ]
+    for definition in fields:
+        name = f"Item-{definition['fieldname']}"
+        if frappe.db.exists("Custom Field", name):
+            continue
+        frappe.get_doc(
+            {
+                "doctype": "Custom Field",
+                "name": name,
+                "dt": "Item",
+                **definition,
+            }
+        ).insert(ignore_permissions=True)
 
 
 def _extend_parent():
